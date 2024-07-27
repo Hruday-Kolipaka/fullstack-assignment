@@ -1,13 +1,9 @@
-## AWS RESOURCES CREATION ##
-
 # PROVIDER SECTION
-
 provider "aws" {
   region = var.aws_region
 }
 
 # VPC CREATION
-
 resource "aws_vpc" "main" {
   cidr_block = var.vpc_cidr
   tags = {
@@ -17,9 +13,7 @@ resource "aws_vpc" "main" {
   }
 }
 
-
 # SUBNETS CREATION 
-
 resource "aws_subnet" "public" {
   count                   = length(var.subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
@@ -34,49 +28,50 @@ resource "aws_subnet" "public" {
   }
 }
 
+# SECURITY GROUP CREATION
+resource "aws_security_group" "allow_all" {
+  vpc_id = aws_vpc.main.id
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name        = "${var.project}-${var.environment}-sg"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
 
 # EC2 INSTANCE CREATION
-
-resource "aws_instance" "web" {
-  count         = var.instance_count
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  subnet_id     = element(aws_subnet.public.*.id, count.index)
+resource "aws_instance" "web_app" {
+  count                   = var.instance_count
+  ami                     = var.ami_id
+  instance_type           = var.instance_type
+  subnet_id               = element(aws_subnet.public.*.id, count.index)
+  vpc_security_group_ids  = [aws_security_group.allow_all.id]
+  key_name                = "HRUDAY-KEYPAIR"  # Add this line
 
   tags = {
-    Name        = "${var.project}-${var.environment}-web-${count.index}"
+    Name        = "${var.project}-${var.environment}-web-app-${count.index}"
     Environment = var.environment
     Project     = var.project
   }
 }
-
-
-# RDS DATABASE CREATION
-
-resource "aws_db_instance" "main" {
-  identifier         = "${var.project}-${var.environment}-db"
-  engine             = "mysql"
-  instance_class     = "db.t3.micro"
-  name               = var.db_name
-  username           = var.db_user
-  password           = var.db_password
-  allocated_storage  = 20
-  vpc_security_group_ids = [aws_security_group.db.id]
-  db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  tags = {
-    Name        = "${var.project}-${var.environment}-db"
-    Environment = var.environment
-    Project     = var.project
-  }
-}
-
 
 # S3 BUCKET CREATION
-
 resource "aws_s3_bucket" "app_bucket" {
   bucket = "${var.s3_bucket_name}-${var.environment}"
-  acl    = "private"
 
   tags = {
     Name        = "${var.s3_bucket_name}-${var.environment}"
@@ -84,4 +79,3 @@ resource "aws_s3_bucket" "app_bucket" {
     Project     = var.project
   }
 }
-
